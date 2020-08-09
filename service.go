@@ -1,6 +1,7 @@
 package sproto
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -284,6 +285,20 @@ func (s *Service) Call(name string, req interface{}) (interface{}, error) {
 	}
 	call = <-call.Done
 	return call.Resp, call.Err
+}
+
+// block call a service which has a reply
+func (s *Service) CallWithTimeout(ctx context.Context, name string, req interface{}) (interface{}, error) {
+	call, err := s.Go(name, req, nil)
+	if err != nil {
+		return nil, err
+	}
+	select {
+	case call = <-call.Done:
+		return call.Resp, call.Err
+	case <-ctx.Done():
+		return nil, fmt.Errorf("sproto: call %s with timeout", name)
+	}
 }
 
 // encode notify packet
