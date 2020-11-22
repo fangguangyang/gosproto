@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	MSG_MAX_LEN = 0xffff
+	MSG_MAX_LEN  = 0xffff
+	MSG_MAX_LEN4 = 0xffffffff
 )
 
 type OnUnknownPacket func(mode RpcMode, name string, session int32, sp interface{}) error
@@ -62,6 +63,7 @@ func (call *Call) done() {
 
 type Service struct {
 	rpc          *Rpc
+	headlen      int
 	readMutex    sync.Mutex // gates read one at a time
 	writeMutex   sync.Mutex // gates write one at a time
 	rw           io.ReadWriter
@@ -163,9 +165,9 @@ func (s *Service) WritePacket(msg []byte) error {
 	if sz > MSG_MAX_LEN {
 		return fmt.Errorf("sproto: message size(%d) should be less than %d", sz, MSG_MAX_LEN)
 	}
-	binary.BigEndian.PutUint16(s.wrbuf[:2], uint16(sz))
-	copy(s.wrbuf[2:], msg)
-	_, err := s.rw.Write(s.wrbuf[:sz+2])
+	binary.BigEndian.PutUint32(s.wrbuf[:s.headlen], uint32(sz))
+	copy(s.wrbuf[s.headlen:], msg)
+	_, err := s.rw.Write(s.wrbuf[:sz+s.headlen])
 	return err
 }
 
@@ -173,12 +175,12 @@ func (s *Service) readPacket() (buf []byte, err error) {
 	s.readMutex.Lock()
 	defer s.readMutex.Unlock()
 
-	var sz uint16
+	var sz uint32
 	if err = binary.Read(s.rw, binary.BigEndian, &sz); err != nil {
 		return
 	}
 
-	var to uint16 = 0
+	var to uint32 = 0
 	buf = s.rdbuf[:sz]
 	for to < sz {
 		var n int
@@ -186,7 +188,7 @@ func (s *Service) readPacket() (buf []byte, err error) {
 		if err != nil {
 			return
 		}
-		to += uint16(n)
+		to += uint32(n)
 	}
 	return
 }
@@ -319,18 +321,32 @@ func (s *Service) SetOnUnknownPacket(onUnknown OnUnknownPacket) {
 	s.onUnknown = onUnknown
 }
 
-func NewService(rw io.ReadWriter, protocols []*Protocol) (*Service, error) {
+func NewService(rw io.ReadWriter, protocols []*Protocol, headlen int) (*Service, error) {
 	rpc, err := NewRpc(protocols)
 	if err != nil {
 		return nil, err
 	}
-	return &Service{
-		rpc:       rpc,
-		rw:        rw,
-		rdbuf:     make([]byte, MSG_MAX_LEN),
-		wrbuf:     make([]byte, MSG_MAX_LEN+2),
-		methods:   make(map[string]*Method),
-		sessions:  make(map[int32]*Call),
-		onUnknown: defaultOnUnknownPacket,
-	}, nil
+	if headlen == 4 {
+		return &Service{
+			rpc:       rpc,
+			headlen:   4,
+			rw:        rw,
+			rdbuf:     make([]byte, MSG_MAX_LEN4),
+			wrbuf:     make([]byte, MSG_MAX_LEN4+2),
+			methods:   make(map[string]*Method),
+			sessions:  make(map[int32]*Call),
+			onUnknown: defaultOnUnknownPacket,
+		}, nil
+	} else {
+		return &Service{
+			rpc:       rpc,
+			headlen:   2,
+			rw:        rw,
+			rdbuf:     make([]byte, MSG_MAX_LEN4),
+			wrbuf:     make([]byte, MSG_MAX_LEN4+2),
+			methods:   make(map[string]*Method),
+			sessions:  make(map[int32]*Call),
+			onUnknown: defaultOnUnknownPacket,
+		}, nil
+	}
 }
