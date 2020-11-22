@@ -162,9 +162,16 @@ func (s *Service) WritePacket(msg []byte) error {
 	defer s.writeMutex.Unlock()
 
 	sz := len(msg)
-	if sz > MSG_MAX_LEN {
-		return fmt.Errorf("sproto: message size(%d) should be less than %d", sz, MSG_MAX_LEN)
+	if s.headlen == 4 {
+		if sz > MSG_MAX_LEN4 {
+			return fmt.Errorf("sproto: message size(%d) should be less than %d", sz, MSG_MAX_LEN4)
+		}
+	} else {
+		if sz > MSG_MAX_LEN {
+			return fmt.Errorf("sproto: message size(%d) should be less than %d", sz, MSG_MAX_LEN)
+		}
 	}
+
 	binary.BigEndian.PutUint32(s.wrbuf[:s.headlen], uint32(sz))
 	copy(s.wrbuf[s.headlen:], msg)
 	_, err := s.rw.Write(s.wrbuf[:sz+s.headlen])
