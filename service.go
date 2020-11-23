@@ -11,9 +11,13 @@ import (
 	"sync/atomic"
 )
 
+type HeadSize int
+
 const (
-	MSG_MAX_LEN  = 0xffff
-	MSG_MAX_LEN4 = 0x0fffffff
+	MSG_MAX_LEN           = 0xffff
+	MSG_MAX_LEN4          = 0x0fffffff
+	HEAD_UINT32  HeadSize = 4
+	HEAD_UINT16  HeadSize = 2
 )
 
 type OnUnknownPacket func(mode RpcMode, name string, session int32, sp interface{}) error
@@ -63,7 +67,7 @@ func (call *Call) done() {
 
 type Service struct {
 	rpc          *Rpc
-	headlen      int
+	headSize     HeadSize
 	readMutex    sync.Mutex // gates read one at a time
 	writeMutex   sync.Mutex // gates write one at a time
 	rw           io.ReadWriter
@@ -162,19 +166,21 @@ func (s *Service) WritePacket(msg []byte) error {
 	defer s.writeMutex.Unlock()
 
 	sz := len(msg)
-	if s.headlen == 4 {
+	if s.headSize == HEAD_UINT32 {
 		if sz > MSG_MAX_LEN4 {
 			return fmt.Errorf("sproto: message size(%d) should be less than %d", sz, MSG_MAX_LEN4)
 		}
-	} else {
-		if sz > MSG_MAX_LEN {
-			return fmt.Errorf("sproto: message size(%d) should be less than %d", sz, MSG_MAX_LEN)
-		}
+		binary.BigEndian.PutUint32(s.wrbuf[:4], uint32(sz))
+		copy(s.wrbuf[4:], msg)
+		_, err := s.rw.Write(s.wrbuf[:sz+4])
+		return err
 	}
-
-	binary.BigEndian.PutUint32(s.wrbuf[:s.headlen], uint32(sz))
-	copy(s.wrbuf[s.headlen:], msg)
-	_, err := s.rw.Write(s.wrbuf[:sz+s.headlen])
+	if sz > MSG_MAX_LEN {
+		return fmt.Errorf("sproto: message size(%d) should be less than %d", sz, MSG_MAX_LEN)
+	}
+	binary.BigEndian.PutUint16(s.wrbuf[:2], uint16(sz))
+	copy(s.wrbuf[2:], msg)
+	_, err := s.rw.Write(s.wrbuf[:sz+2])
 	return err
 }
 
@@ -328,7 +334,7 @@ func (s *Service) SetOnUnknownPacket(onUnknown OnUnknownPacket) {
 	s.onUnknown = onUnknown
 }
 
-func NewService(rw io.ReadWriter, protocols []*Protocol, headlen int) (*Service, error) {
+func NewService(rw io.ReadWriter, protocols []*Protocol, headlen HeadSize) (*Service, error) {
 	rpc, err := NewRpc(protocols)
 	if err != nil {
 		return nil, err
@@ -336,7 +342,7 @@ func NewService(rw io.ReadWriter, protocols []*Protocol, headlen int) (*Service,
 	if headlen == 4 {
 		return &Service{
 			rpc:       rpc,
-			headlen:   4,
+			headSize:  HEAD_UINT32,
 			rw:        rw,
 			rdbuf:     make([]byte, MSG_MAX_LEN4),
 			wrbuf:     make([]byte, MSG_MAX_LEN4+2),
@@ -347,7 +353,7 @@ func NewService(rw io.ReadWriter, protocols []*Protocol, headlen int) (*Service,
 	}
 	return &Service{
 		rpc:       rpc,
-		headlen:   2,
+		headSize:  HEAD_UINT16,
 		rw:        rw,
 		rdbuf:     make([]byte, MSG_MAX_LEN),
 		wrbuf:     make([]byte, MSG_MAX_LEN+2),
