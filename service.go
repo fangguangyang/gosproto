@@ -11,13 +11,11 @@ import (
 	"sync/atomic"
 )
 
-type HeadSize int
-
 const (
-	MSG_MAX_LEN           = 0xffff
-	MSG_MAX_LEN4          = 0x0fffffff
-	HEAD_UINT32  HeadSize = 4
-	HEAD_UINT16  HeadSize = 2
+	MSG_MAX_LEN  = 0xffff
+	MSG_MAX_LEN4 = 0x0fffffff
+	HEAD_UINT32  = 4
+	HEAD_UINT16  = 2
 )
 
 type OnUnknownPacket func(mode RpcMode, name string, session int32, sp interface{}) error
@@ -67,7 +65,7 @@ func (call *Call) done() {
 
 type Service struct {
 	rpc          *Rpc
-	headSize     HeadSize
+	headSize     int
 	readMutex    sync.Mutex // gates read one at a time
 	writeMutex   sync.Mutex // gates write one at a time
 	rw           io.ReadWriter
@@ -334,7 +332,7 @@ func (s *Service) SetOnUnknownPacket(onUnknown OnUnknownPacket) {
 	s.onUnknown = onUnknown
 }
 
-func NewService(rw io.ReadWriter, protocols []*Protocol, headlen HeadSize) (*Service, error) {
+func NewService(rw io.ReadWriter, protocols []*Protocol, headlen int) (*Service, error) {
 	rpc, err := NewRpc(protocols)
 	if err != nil {
 		return nil, err
