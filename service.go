@@ -186,12 +186,30 @@ func (s *Service) readPacket() (buf []byte, err error) {
 	s.readMutex.Lock()
 	defer s.readMutex.Unlock()
 
-	var sz uint32
+	if s.headSize == HEAD_UINT32 {
+		var sz uint32
+		if err = binary.Read(s.rw, binary.BigEndian, &sz); err != nil {
+			return
+		}
+
+		var to uint32 = 0
+		buf = s.rdbuf[:sz]
+		for to < sz {
+			var n int
+			n, err = s.rw.Read(buf[to:])
+			if err != nil {
+				return
+			}
+			to += uint32(n)
+		}
+		return
+	}
+	var sz uint16
 	if err = binary.Read(s.rw, binary.BigEndian, &sz); err != nil {
 		return
 	}
 
-	var to uint32 = 0
+	var to uint16 = 0
 	buf = s.rdbuf[:sz]
 	for to < sz {
 		var n int
@@ -199,7 +217,7 @@ func (s *Service) readPacket() (buf []byte, err error) {
 		if err != nil {
 			return
 		}
-		to += uint32(n)
+		to += uint16(n)
 	}
 	return
 }
@@ -290,7 +308,7 @@ func (s *Service) Go(name string, req interface{}, done chan *Call) (call *Call,
 	return
 }
 
-// block call a service which has a reply
+//Call block call a service which has a reply
 func (s *Service) Call(name string, req interface{}) (interface{}, error) {
 	call, err := s.Go(name, req, nil)
 	if err != nil {
@@ -300,7 +318,7 @@ func (s *Service) Call(name string, req interface{}) (interface{}, error) {
 	return call.Resp, call.Err
 }
 
-// block call a service which has a reply
+//CallWithTimeout block call a service which has a reply
 func (s *Service) CallWithTimeout(ctx context.Context, name string, req interface{}) (interface{}, error) {
 	call, err := s.Go(name, req, nil)
 	if err != nil {
@@ -314,12 +332,12 @@ func (s *Service) CallWithTimeout(ctx context.Context, name string, req interfac
 	}
 }
 
-// encode notify packet
+//Encode encode notify packet
 func (s *Service) Encode(name string, req interface{}) ([]byte, error) {
 	return s.rpc.RequestEncode(name, 0, req)
 }
 
-// invoke a service which has not a reply
+//Invoke invoke a service which has not a reply
 func (s *Service) Invoke(name string, req interface{}) error {
 	data, err := s.rpc.RequestEncode(name, 0, req)
 	if err != nil {
@@ -328,10 +346,12 @@ func (s *Service) Invoke(name string, req interface{}) error {
 	return s.WritePacket(data)
 }
 
+//SetOnUnknownPacket  ...
 func (s *Service) SetOnUnknownPacket(onUnknown OnUnknownPacket) {
 	s.onUnknown = onUnknown
 }
 
+//NewService ...
 func NewService(rw io.ReadWriter, protocols []*Protocol, headlen int) (*Service, error) {
 	rpc, err := NewRpc(protocols)
 	if err != nil {
