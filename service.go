@@ -13,7 +13,7 @@ import (
 
 const (
 	MSG_MAX_LEN  = 0xffff
-	MSG_MAX_LEN4 = 0xffffffff
+	MSG_MAX_LEN4 = 0x0fffffff
 )
 
 type OnUnknownPacket func(mode RpcMode, name string, session int32, sp interface{}) error
@@ -344,16 +344,16 @@ func NewService(rw io.ReadWriter, protocols []*Protocol, headlen int) (*Service,
 			sessions:  make(map[int32]*Call),
 			onUnknown: defaultOnUnknownPacket,
 		}, nil
-	} else {
-		return &Service{
-			rpc:       rpc,
-			headlen:   2,
-			rw:        rw,
-			rdbuf:     make([]byte, MSG_MAX_LEN4),
-			wrbuf:     make([]byte, MSG_MAX_LEN4+2),
-			methods:   make(map[string]*Method),
-			sessions:  make(map[int32]*Call),
-			onUnknown: defaultOnUnknownPacket,
-		}, nil
 	}
+	return &Service{
+		rpc:       rpc,
+		headlen:   2,
+		rw:        rw,
+		rdbuf:     make([]byte, MSG_MAX_LEN),
+		wrbuf:     make([]byte, MSG_MAX_LEN+2),
+		methods:   make(map[string]*Method),
+		sessions:  make(map[int32]*Call),
+		onUnknown: defaultOnUnknownPacket,
+	}, nil
+
 }
