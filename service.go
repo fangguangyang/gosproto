@@ -13,7 +13,7 @@ import (
 
 const (
 	MSG_MAX_LEN  = 0xffff
-	MSG_MAX_LEN4 = 0x0fffffff
+	MSG_MAX_LEN4 = 0x00ffffff
 	HEAD_UINT32  = 4
 	HEAD_UINT16  = 2
 )
@@ -69,8 +69,6 @@ type Service struct {
 	readMutex    sync.Mutex // gates read one at a time
 	writeMutex   sync.Mutex // gates write one at a time
 	rw           io.ReadWriter
-	rdbuf        []byte // read buffer
-	wrbuf        []byte // write buffer
 	session      int32
 	methodMutex  sync.Mutex
 	methods      map[string]*Method
@@ -164,21 +162,23 @@ func (s *Service) WritePacket(msg []byte) error {
 	defer s.writeMutex.Unlock()
 
 	sz := len(msg)
+	var wrbuf = make([]byte, sz+s.headSize)
 	if s.headSize == HEAD_UINT32 {
 		if sz > MSG_MAX_LEN4 {
 			return fmt.Errorf("sproto: message size(%d) should be less than %d", sz, MSG_MAX_LEN4)
 		}
-		binary.BigEndian.PutUint32(s.wrbuf[:4], uint32(sz))
-		copy(s.wrbuf[4:], msg)
-		_, err := s.rw.Write(s.wrbuf[:sz+4])
+
+		binary.BigEndian.PutUint32(wrbuf[:4], uint32(sz))
+		copy(wrbuf[4:], msg)
+		_, err := s.rw.Write(wrbuf[:sz+4])
 		return err
 	}
 	if sz > MSG_MAX_LEN {
 		return fmt.Errorf("sproto: message size(%d) should be less than %d", sz, MSG_MAX_LEN)
 	}
-	binary.BigEndian.PutUint16(s.wrbuf[:2], uint16(sz))
-	copy(s.wrbuf[2:], msg)
-	_, err := s.rw.Write(s.wrbuf[:sz+2])
+	binary.BigEndian.PutUint16(wrbuf[:2], uint16(sz))
+	copy(wrbuf[2:], msg)
+	_, err := s.rw.Write(wrbuf[:sz+2])
 	return err
 }
 
@@ -191,9 +191,9 @@ func (s *Service) readPacket() (buf []byte, err error) {
 		if err = binary.Read(s.rw, binary.BigEndian, &sz); err != nil {
 			return
 		}
-
+		var rdbuf = make([]byte, sz)
 		var to uint32 = 0
-		buf = s.rdbuf[:sz]
+		buf = rdbuf[:sz]
 		for to < sz {
 			var n int
 			n, err = s.rw.Read(buf[to:])
@@ -208,9 +208,9 @@ func (s *Service) readPacket() (buf []byte, err error) {
 	if err = binary.Read(s.rw, binary.BigEndian, &sz); err != nil {
 		return
 	}
-
+	var rdbuf = make([]byte, sz)
 	var to uint16 = 0
-	buf = s.rdbuf[:sz]
+	buf = rdbuf[:sz]
 	for to < sz {
 		var n int
 		n, err = s.rw.Read(buf[to:])
@@ -362,8 +362,6 @@ func NewService(rw io.ReadWriter, protocols []*Protocol, headlen int) (*Service,
 			rpc:       rpc,
 			headSize:  HEAD_UINT32,
 			rw:        rw,
-			rdbuf:     make([]byte, MSG_MAX_LEN4),
-			wrbuf:     make([]byte, MSG_MAX_LEN4+2),
 			methods:   make(map[string]*Method),
 			sessions:  make(map[int32]*Call),
 			onUnknown: defaultOnUnknownPacket,
@@ -373,8 +371,6 @@ func NewService(rw io.ReadWriter, protocols []*Protocol, headlen int) (*Service,
 		rpc:       rpc,
 		headSize:  HEAD_UINT16,
 		rw:        rw,
-		rdbuf:     make([]byte, MSG_MAX_LEN),
-		wrbuf:     make([]byte, MSG_MAX_LEN+2),
 		methods:   make(map[string]*Method),
 		sessions:  make(map[int32]*Call),
 		onUnknown: defaultOnUnknownPacket,
