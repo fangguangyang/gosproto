@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/fangguangyang/gosproto"
+	sproto "github.com/fangguangyang/gosproto"
 	"github.com/fangguangyang/gosproto/examples/sproto_echo"
 
 	"net/http"
@@ -23,7 +23,7 @@ func (e *Echo) Ping(req *sproto_echo.PingRequest, resp *sproto_echo.PingResponse
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
-	server, _ := sproto.NewService(conn, sproto_echo.Protocols)
+	server, _ := sproto.NewService(conn, sproto_echo.Protocols, sproto.HEAD_UINT16)
 	server.Register(&echo)
 	err := server.Dispatch()
 	if err == io.EOF {

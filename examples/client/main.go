@@ -15,7 +15,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	client, _ := sproto.NewService(conn, sproto_echo.Protocols)
+	client, _ := sproto.NewService(conn, sproto_echo.Protocols, sproto.HEAD_UINT16)
 	count := 100000
 	log.Printf("test echo %d times", count)
 	ping := sproto_echo.PingRequest{}
