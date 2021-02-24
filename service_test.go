@@ -38,7 +38,7 @@ func TestFoobarService(t *testing.T) {
 	rw := bytes.NewBuffer(nil)
 
 	// client
-	client, _ := NewService(rw, protocols)
+	client, _ := NewService(rw, protocols, HEAD_UINT16)
 	req := FoobarRequest{
 		What: &input,
 	}
@@ -48,7 +48,7 @@ func TestFoobarService(t *testing.T) {
 	}
 
 	// server
-	server, _ := NewService(rw, protocols)
+	server, _ := NewService(rw, protocols, HEAD_UINT16)
 	if err := server.Register(&inst); err != nil {
 		t.Fatalf("register service failed:%s", err)
 	}
@@ -72,14 +72,14 @@ func TestFooService(t *testing.T) {
 	rw := bytes.NewBuffer(nil)
 
 	// client
-	client, _ := NewService(rw, protocols)
+	client, _ := NewService(rw, protocols, HEAD_UINT16)
 	call, err := client.Go(name, nil, nil)
 	if err != nil {
 		t.Fatalf("client call failed:%s", err)
 	}
 
 	// server
-	server, _ := NewService(rw, protocols)
+	server, _ := NewService(rw, protocols, HEAD_UINT16)
 	if err := server.Register(&inst); err != nil {
 		t.Fatalf("register service failed:%s", err)
 	}
@@ -103,7 +103,7 @@ func TestBarService(t *testing.T) {
 	rw := bytes.NewBuffer(nil)
 
 	// client
-	client, _ := NewService(rw, protocols)
+	client, _ := NewService(rw, protocols, HEAD_UINT16)
 	err := client.Invoke(name, nil)
 	if err != nil {
 		t.Fatalf("client call failed:%s", err)
@@ -111,7 +111,7 @@ func TestBarService(t *testing.T) {
 
 	// server
 	barCalled = false
-	server, _ := NewService(rw, protocols)
+	server, _ := NewService(rw, protocols, HEAD_UINT16)
 	if err := server.Register(&inst); err != nil {
 		t.Fatalf("register service failed:%s", err)
 	}
